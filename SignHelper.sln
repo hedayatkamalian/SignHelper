@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.2.32630.192
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignHelper", "SignHelper\SignHelper.csproj", "{F8F564FF-0599-45FB-A3B1-B2DDE8B8F04E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignHelperApp", "SignHelperApp\SignHelperApp.csproj", "{54F0B868-3DC0-4FCA-9B86-AF1E7418F7DE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F8F564FF-0599-45FB-A3B1-B2DDE8B8F04E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F8F564FF-0599-45FB-A3B1-B2DDE8B8F04E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F8F564FF-0599-45FB-A3B1-B2DDE8B8F04E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F8F564FF-0599-45FB-A3B1-B2DDE8B8F04E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{54F0B868-3DC0-4FCA-9B86-AF1E7418F7DE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{54F0B868-3DC0-4FCA-9B86-AF1E7418F7DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{54F0B868-3DC0-4FCA-9B86-AF1E7418F7DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{54F0B868-3DC0-4FCA-9B86-AF1E7418F7DE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {53963B23-D313-4F9F-9949-0C3DFD371D5C}
+	EndGlobalSection
+EndGlobal
