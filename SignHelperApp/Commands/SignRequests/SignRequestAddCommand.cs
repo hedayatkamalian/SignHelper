@@ -1,4 +1,4 @@
-﻿namespace SignHelperApp.Command.SignRequest
+﻿namespace SignHelperApp.Commands.SignRequests
 {
     public class SignRequestAddCommand
     {

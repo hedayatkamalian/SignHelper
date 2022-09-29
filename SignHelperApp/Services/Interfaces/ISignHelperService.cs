@@ -1,6 +1,6 @@
 ﻿using MustIt.Kernel.Services;
-using SignHelperApp.Command.SignRequest;
-using SignHelperApp.Command.Template;
+using SignHelperApp.Commands.SignRequests;
+using SignHelperApp.Commands.Templates;
 using SignHelperApp.Entities;
 
 namespace SignHelperApp.Services.Interfaces
@@ -11,5 +11,6 @@ namespace SignHelperApp.Services.Interfaces
         Task<ServiceResult<string>> TemplateDelete(long id);
         Task<ServiceResult<IList<Template>>> TemplateGetAll();
         Task<ServiceResult<string>> SignRequestAdd(SignRequestAddCommand commad);
+        Task<ServiceResult<string>> SingRequestSign(long id, string confirmCode);
     }
 }

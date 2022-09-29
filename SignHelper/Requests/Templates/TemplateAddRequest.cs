@@ -7,10 +7,15 @@ namespace SignHelper.Requests.Templates
         [Required]
         public string Name { get; set; }
 
-        [Required]
-        public int XPosition { get; set; }
+        public string? ImageName { get; set; }
 
         [Required]
-        public int YPosition { get; set; }
+        public int Width { get; set; }
+
+        [Required]
+        public int Height { get; set; }
+
+        [Required]
+        public IList<SingPointAddRequest> SingPoints { get; set; }
     }
 }

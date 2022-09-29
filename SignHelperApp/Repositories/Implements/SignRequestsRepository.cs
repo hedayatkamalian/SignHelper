@@ -17,7 +17,7 @@ namespace SignHelperApp.Repositories.Implements
 
         public async Task<SignRequest?> GetAsync(Expression<Func<SignRequest, bool>> predicate)
         {
-            return await _dataContext.SignRequests.FirstOrDefaultAsync(predicate);
+            return await _dataContext.SignRequests.Include(p => p.Template).FirstOrDefaultAsync(predicate);
         }
 
 
