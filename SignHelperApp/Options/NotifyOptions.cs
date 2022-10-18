@@ -4,5 +4,6 @@
     {
         public string PhoneNumber { get; set; }
         public string TemplateName { get; set; }
+        public string SendConfirmCodeTemplateName { get; set; }
     }
 }

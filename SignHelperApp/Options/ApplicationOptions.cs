@@ -4,6 +4,7 @@
     {
         public string ApplicationBaseUrl { get; set; }
         public string ConfirmApiAddress { get; set; }
+        public int ExpireInDays { get; set; }
         public NotifyOptions NotifyOptions { get; set; }
         public string DefaultSignImageName { get; set; }
         public FolderOptions Folders { get; set; }

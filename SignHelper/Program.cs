@@ -47,6 +47,8 @@ var app = builder.Build();
 
 var tempFolder = builder.Configuration.GetValue<string>("ApplicationOptions:Folders:Temp");
 app.AddStaticFolder(tempFolder);
+app.AddStaticFolder("ui");
+
 
 
 app.UseSwagger();

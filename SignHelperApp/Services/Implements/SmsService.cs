@@ -36,7 +36,14 @@ namespace SignHelperApp.Services.Implements
 
         public async Task SendTemplateMessage(string phoneNumber, string templateName, Dictionary<string, string>? paramteres)
         {
-            var templateText = _smsOptions.Templates.First(p => p.Name == templateName).Text;
+            var template = _smsOptions.Templates.First(p => p.Name == templateName);
+
+            if (template is null || string.IsNullOrEmpty(template.Text))
+            {
+                throw new Exception("template or template text is null");
+            }
+
+            var templateText = template.Text;
 
             if (paramteres is not null)
             {

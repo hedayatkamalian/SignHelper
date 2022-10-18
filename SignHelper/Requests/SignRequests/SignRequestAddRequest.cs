@@ -9,7 +9,15 @@ namespace SignHelper.Requests.SignRequests
 
         [Required]
         [EmailAddress]
-        public string Email { get; set; }
+        public string RecipientEmail { get; set; }
+
+        [Required]
+        [EmailAddress]
+        public string SingerEmail { get; set; }
+
+        [Required]
+        [EmailAddress]
+        public string SignerPhoneNumber { get; set; }
 
         [Required]
         public long TemplateId { get; set; }
