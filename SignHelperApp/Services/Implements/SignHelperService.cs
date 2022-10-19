@@ -129,7 +129,7 @@ namespace SignHelperApp.Services.Implements
             {
                 throw new SignRequestException(HttpStatusCode.UnprocessableEntity, _applicationErrors.DocumentIsSignedBefore);
             }
-            else if (signRequest.ExpireIn < DateTimeOffset.Now)
+            else if (signRequest.ExpireIn < DateTimeOffset.UtcNow)
             {
                 throw new SignRequestException(HttpStatusCode.UnprocessableEntity, _applicationErrors.SignRequestIsExpired);
             }
@@ -164,7 +164,7 @@ namespace SignHelperApp.Services.Implements
             }
         }
 
-        public async Task<ServiceResult<SignRequestDto>> SignRequestSendConfirmCode(long id)
+        public async Task<ServiceResult<int>> SignRequestSendConfirmCode(long id)
         {
             try
             {
@@ -172,29 +172,37 @@ namespace SignHelperApp.Services.Implements
 
                 var confirmCode = GenerateConfirmCode();
 
-                if (signRequest.ConfirmCodeExpireIn == null || signRequest.ConfirmCodeExpireIn < DateTimeOffset.Now)
+                if (signRequest.ConfirmCodeExpireIn == null || signRequest.ConfirmCodeExpireIn < DateTimeOffset.UtcNow)
                 {
-                    signRequest.ConfirmCodeExpireIn = DateTimeOffset.Now.AddMinutes(_applicationOptions.ConfirmCodeOptions.ExpireInMinutes);
+                    signRequest.ConfirmCodeExpireIn = DateTimeOffset.UtcNow.AddSeconds(_applicationOptions.ConfirmCodeOptions.ExpireInSeconds);
                     signRequest.ConfirmCode = confirmCode;
+                }
+                else
+                {
+                    throw new SignRequestException(HttpStatusCode.UnprocessableEntity, _applicationErrors.YouShouldWaitToRequestNewCode);
                 }
 
                 await _signRequestRepository.SaveChangesAsync();
+
                 var paraDic = new Dictionary<string, string>();
                 paraDic.Add("code", confirmCode);
+
+#if (!DEBUG)
 
                 await _smsService.SendTemplateMessage(signRequest.SignerPhoneNumber,
                     _applicationOptions.NotifyOptions.SendConfirmCodeTemplateName,
                     paraDic);
+#endif
 
-                return new ServiceResult<SignRequestDto>(HttpStatusCode.OK);
+                return new ServiceResult<int>(_applicationOptions.ConfirmCodeOptions.ExpireInSeconds, HttpStatusCode.OK);
             }
             catch (SignRequestException ex)
             {
-                return new ServiceResult<SignRequestDto>(ex.StatusCode, ex.Message);
+                return new ServiceResult<int>(ex.StatusCode, ex.Message);
             }
             catch (Exception ex)
             {
-                return new ServiceResult<SignRequestDto>(HttpStatusCode.InternalServerError, ex.Message);
+                return new ServiceResult<int>(HttpStatusCode.InternalServerError, ex.Message);
             }
         }
 
@@ -212,7 +220,7 @@ namespace SignHelperApp.Services.Implements
                 {
                     return new ServiceResult<SignRequestDto>(HttpStatusCode.UnprocessableEntity, _applicationErrors.DocumentIsSignedBefore);
                 }
-                else if (signRequest.ExpireIn < DateTimeOffset.Now)
+                else if (signRequest.ExpireIn < DateTimeOffset.UtcNow)
                 {
                     return new ServiceResult<SignRequestDto>(HttpStatusCode.UnprocessableEntity, _applicationErrors.SignRequestIsExpired);
                 }
@@ -260,7 +268,7 @@ namespace SignHelperApp.Services.Implements
                     SignerEmail = command.SingerEmail,
                     SignerPhoneNumber = command.SingerPhoneNumber,
                     Description = command.Description,
-                    ExpireIn = DateTimeOffset.Now.AddDays(_applicationOptions.ExpireInDays),
+                    ExpireIn = DateTimeOffset.UtcNow.AddDays(_applicationOptions.ExpireInDays),
                     ConfirmCodeExpireIn = null,
                     Done = false,
                     TemplateId = command.TemplateId
@@ -315,7 +323,7 @@ namespace SignHelperApp.Services.Implements
                 {
                     return new ServiceResult<string>(HttpStatusCode.UnprocessableEntity, _applicationErrors.DocumentIsSignedBefore);
                 }
-                else if (signRequest.ExpireIn < DateTimeOffset.Now)
+                else if (signRequest.ExpireIn < DateTimeOffset.UtcNow)
                 {
                     return new ServiceResult<string>(HttpStatusCode.UnprocessableEntity, _applicationErrors.SignRequestIsExpired);
                 }
@@ -349,7 +357,7 @@ namespace SignHelperApp.Services.Implements
                 {
                     return new ServiceResult<string>(HttpStatusCode.UnprocessableEntity, _applicationErrors.DocumentIsSignedBefore);
                 }
-                else if (signRequest.ExpireIn < DateTimeOffset.Now)
+                else if (signRequest.ExpireIn < DateTimeOffset.UtcNow)
                 {
                     return new ServiceResult<string>(HttpStatusCode.UnprocessableEntity, _applicationErrors.SignRequestIsExpired);
                 }
@@ -429,19 +437,20 @@ namespace SignHelperApp.Services.Implements
             var doc = new PdfDocument();
             doc.LoadFromFile(originalDocument);
 
-            Image image = Image.FromFile(signImage);
-            Size size = new Size(width, height);
-
-            foreach (var point in signPoints)
+            using (Image image = Image.FromFile(signImage))
             {
-                PdfImage pdfImage = PdfImage.FromImage(image);
-                PdfPageBase page = doc.Pages[point.Page - 1];
-                PointF position = new PointF(point.X, point.Y);
-                page.Canvas.DrawImage(pdfImage, position, size);
+                Size size = new Size(width, height);
+
+                foreach (var point in signPoints)
+                {
+                    PdfImage pdfImage = PdfImage.FromImage(image);
+                    PdfPageBase page = doc.Pages[point.Page - 1];
+                    PointF position = new PointF(point.X, point.Y);
+                    page.Canvas.DrawImage(pdfImage, position, size);
+                }
+
+                doc.SaveToFile(signedDocument);
             }
-
-            doc.SaveToFile(signedDocument);
-
             return signedDocument;
         }
 

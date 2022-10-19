@@ -3,6 +3,6 @@
     public class ConfirmCodeOptions
     {
         public int Length { get; set; }
-        public int ExpireInMinutes { get; set; }
+        public int ExpireInSeconds { get; set; }
     }
 }

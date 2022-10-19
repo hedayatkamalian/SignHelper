@@ -9,5 +9,6 @@
         public string SignRequestNotFound { get; set; }
         public string ConfirmCodeIsWrong { get; set; }
         public string SignImageError { get; set; }
+        public string YouShouldWaitToRequestNewCode { get; set; }
     }
 }

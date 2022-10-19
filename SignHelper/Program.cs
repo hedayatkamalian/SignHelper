@@ -19,7 +19,13 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 
 builder.Services.AddControllers();
+
+#if (DEBUG)
+var serverVersion = new MySqlServerVersion(new Version(5, 7, 11));
+#else
 var serverVersion = new MySqlServerVersion(new Version(8, 0, 28));
+#endif
+
 builder.Services.AddDbContext<DataContext>(options => options.UseMySql(builder.Configuration.GetConnectionString("default"), serverVersion));
 builder.Services.AddIdGen(1);
 builder.Services.AddHttpClient();

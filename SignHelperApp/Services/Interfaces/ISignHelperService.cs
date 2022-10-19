@@ -16,6 +16,6 @@ namespace SignHelperApp.Services.Interfaces
         Task<ServiceResult<SignRequestDto>> SignRequestGetWithCode(long id, string code);
         Task<ServiceResult<string>> SingRequestSign(SignRequestSignCommand command);
         Task<ServiceResult<string>> SingRequestConfirm(long id, string confirmCode);
-        Task<ServiceResult<SignRequestDto>> SignRequestSendConfirmCode(long id);
+        Task<ServiceResult<int>> SignRequestSendConfirmCode(long id);
     }
 }

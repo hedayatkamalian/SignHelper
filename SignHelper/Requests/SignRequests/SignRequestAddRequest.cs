@@ -16,7 +16,6 @@ namespace SignHelper.Requests.SignRequests
         public string SingerEmail { get; set; }
 
         [Required]
-        [EmailAddress]
         public string SignerPhoneNumber { get; set; }
 
         [Required]
