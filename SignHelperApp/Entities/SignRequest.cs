@@ -3,8 +3,10 @@
     public class SignRequest
     {
         public long Id { get; set; }
-        public Template Template { get; set; }
-        public long TemplateId { get; set; }
+        public Template SignTemplate { get; set; }
+        public long SignTemplateId { get; set; }
+        public long? StampTemplateId { get; set; }
+
         public string RecipientEmail { get; set; }
         public string SignerEmail { get; set; }
         public string SignerPhoneNumber { get; set; }

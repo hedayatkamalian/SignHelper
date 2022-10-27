@@ -19,7 +19,8 @@ namespace SignHelper.Requests.SignRequests
         public string SignerPhoneNumber { get; set; }
 
         [Required]
-        public long TemplateId { get; set; }
+        public long SignTemplateId { get; set; }
+        public long? StampTemplateId { get; set; }
         public string? Description { get; set; }
     }
 }

@@ -38,6 +38,7 @@ builder.Services.AddScoped<ISmsService, SmsService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ITemplatesRepository, TemplatesRepository>();
 builder.Services.AddScoped<ISignRequestsRepository, SignRequestsRepository>();
+builder.Services.AddHttpClient();
 
 builder.Services.Configure<ApplicationOptions>(builder.Configuration.GetSection(nameof(ApplicationOptions)));
 builder.Services.Configure<ApplicationErrors>(builder.Configuration.GetSection(nameof(ApplicationErrors)));

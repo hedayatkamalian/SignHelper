@@ -16,6 +16,9 @@ using Spire.Pdf;
 using Spire.Pdf.Graphics;
 using System.Drawing;
 using System.Net;
+using System.Text;
+using System.Text.Json;
+
 
 namespace SignHelperApp.Services.Implements
 {
@@ -27,6 +30,7 @@ namespace SignHelperApp.Services.Implements
         private readonly IdGenerator _idGenerator;
         private readonly IDownloaderService _downloaderService;
         private readonly ISmsService _smsService;
+        private readonly IHttpClientFactory _httpClientFactory;
         private readonly ApplicationOptions _applicationOptions;
         private readonly ApplicationErrors _applicationErrors;
 
@@ -36,6 +40,7 @@ namespace SignHelperApp.Services.Implements
             IdGenerator idGenerator,
             IDownloaderService downloaderService,
             ISmsService smsService,
+            IHttpClientFactory httpClientFactory,
             IOptions<ApplicationOptions> applicationOptions,
             IOptions<ApplicationErrors> applicationErrors)
         {
@@ -45,6 +50,7 @@ namespace SignHelperApp.Services.Implements
             _idGenerator = idGenerator;
             _downloaderService = downloaderService;
             _smsService = smsService;
+            _httpClientFactory = httpClientFactory;
             _applicationOptions = applicationOptions.Value;
             _applicationErrors = applicationErrors.Value;
         }
@@ -57,7 +63,7 @@ namespace SignHelperApp.Services.Implements
                 {
                     Id = _idGenerator.CreateId(),
                     Name = command.Name,
-                    SignImageName = command.ImageName,
+                    StampName = command.ImageName,
                     Height = command.Height,
                     Width = command.Width,
                     SignPoints = command.SignPoints,
@@ -110,11 +116,6 @@ namespace SignHelperApp.Services.Implements
             {
                 return new ServiceResult<IList<Template>>(HttpStatusCode.InternalServerError, ex.Message);
             }
-        }
-
-        private async Task<Template?> TemplateFindByName(string name)
-        {
-            return await _templateRepository.GetAsync(p => p.Name.ToLower() == name.ToLower());
         }
 
         private async Task<SignRequest> SignRequestGetAndCheck(long id)
@@ -190,8 +191,7 @@ namespace SignHelperApp.Services.Implements
 #if (!DEBUG)
 
                 await _smsService.SendTemplateMessage(signRequest.SignerPhoneNumber,
-                    _applicationOptions.NotifyOptions.SendConfirmCodeTemplateName,
-                    paraDic);
+                    _applicationOptions.ConfirmCodeTemplateName, paraDic);
 #endif
 
                 return new ServiceResult<int>(_applicationOptions.ConfirmCodeOptions.ExpireInSeconds, HttpStatusCode.OK);
@@ -210,20 +210,7 @@ namespace SignHelperApp.Services.Implements
         {
             try
             {
-                var signRequest = await _signRequestRepository.GetAsync(p => p.Id == id && p.ConfirmCode == code);
-
-                if (signRequest is null)
-                {
-                    return new ServiceResult<SignRequestDto>(HttpStatusCode.NotFound);
-                }
-                else if (signRequest.Done)
-                {
-                    return new ServiceResult<SignRequestDto>(HttpStatusCode.UnprocessableEntity, _applicationErrors.DocumentIsSignedBefore);
-                }
-                else if (signRequest.ExpireIn < DateTimeOffset.UtcNow)
-                {
-                    return new ServiceResult<SignRequestDto>(HttpStatusCode.UnprocessableEntity, _applicationErrors.SignRequestIsExpired);
-                }
+                var signRequest = await SignRequestGetAndCheck(id);
 
                 var dto = new SignRequestDto
                 {
@@ -235,6 +222,10 @@ namespace SignHelperApp.Services.Implements
                 };
 
                 return new ServiceResult<SignRequestDto>(dto, HttpStatusCode.OK);
+            }
+            catch (SignRequestException ex)
+            {
+                return new ServiceResult<SignRequestDto>(ex.StatusCode, ex.Message);
             }
             catch (Exception ex)
             {
@@ -254,7 +245,7 @@ namespace SignHelperApp.Services.Implements
                 var filePath = await _downloaderService.Download(command.FileURL, dirPath, fileName);
 
 
-                var templateIdExist = await _templateRepository.AnyAsync(p => p.Id == command.TemplateId && !p.Deleted);
+                var templateIdExist = await _templateRepository.AnyAsync(p => p.Id == command.SignTemplateId && !p.Deleted);
 
                 if (!templateIdExist)
                 {
@@ -270,32 +261,33 @@ namespace SignHelperApp.Services.Implements
                     Description = command.Description,
                     ExpireIn = DateTimeOffset.UtcNow.AddDays(_applicationOptions.ExpireInDays),
                     ConfirmCodeExpireIn = null,
+                    ConfirmCode = GenerateConfirmCode(),
                     Done = false,
-                    TemplateId = command.TemplateId
+                    SignTemplateId = command.SignTemplateId,
+                    StampTemplateId = command.StampTemplateId
                 };
 
                 await _signRequestRepository.AddAsync(signRequest);
                 var saveResult = await _signRequestRepository.SaveChangesAsync();
+                var singLink = @$"{System.Environment.NewLine} {_applicationOptions.ConfirmApiAddress}/{signRequest.Id}";
 
 
-
-                var paraDic = new Dictionary<string, string>();
-                paraDic.Add("api", _applicationOptions.ConfirmApiAddress);
-                paraDic.Add("id", signRequest.Id.ToString());
-                paraDic.Add("code", signRequest.ConfirmCode);
-                paraDic.Add("desc", signRequest.Description);
-
-                try
+                var email = new Email
                 {
-                    await _smsService.SendTemplateMessage(_applicationOptions.NotifyOptions.PhoneNumber
-                    , _applicationOptions.NotifyOptions.TemplateName, paraDic);
-                }
-                catch (Exception ex)
-                {
-                    throw new Exception($"error in sending SMS " +
-                        $"Template ({_applicationOptions.NotifyOptions.TemplateName})," +
-                        $"PhoneNumber({_applicationOptions.NotifyOptions.PhoneNumber}) {ex.Message}");
-                }
+                    SenderEmail = _applicationOptions.SendDraftDocument.SenderEmail,
+                    SenderName = _applicationOptions.SendDraftDocument.SenderName,
+                    To = new List<string>() { signRequest.SignerEmail },
+                    Subject = _applicationOptions.SendDraftDocument.Subject,
+                    Cc = _applicationOptions.SendDraftDocument.Cc,
+                    Bcc = _applicationOptions.SendDraftDocument.Bcc,
+#if (!DEBUG)
+                    AttachmentsUrl = new string[] { @$"{_applicationOptions.ApplicationBaseUrl}{PathHelper.GetRelationPath(filePath, false)}" },
+#endif
+                    HeaderPictureUrl = _applicationOptions.SendDraftDocument.HeaderPictureUrl,
+                    Body = _applicationOptions.SendDraftDocument.Body + singLink
+                };
+
+                await _emailService.SendEmail(email);
 
                 var response = ResponseBaseOnResult<string>(saveResult, HttpStatusCode.Created);
                 response.Id = id.ToString();
@@ -313,26 +305,19 @@ namespace SignHelperApp.Services.Implements
         {
             try
             {
-                var signRequest = await _signRequestRepository.GetAsync(p => p.Id == id);
+                var signRequest = await SignRequestGetAndCheck(id);
 
-                if (signRequest is null)
+                if (signRequest.ConfirmCode != confirmCode)
                 {
-                    return new ServiceResult<string>(HttpStatusCode.NotFound, _applicationErrors.SignRequestNotFound);
-                }
-                else if (signRequest.Done)
-                {
-                    return new ServiceResult<string>(HttpStatusCode.UnprocessableEntity, _applicationErrors.DocumentIsSignedBefore);
-                }
-                else if (signRequest.ExpireIn < DateTimeOffset.UtcNow)
-                {
-                    return new ServiceResult<string>(HttpStatusCode.UnprocessableEntity, _applicationErrors.SignRequestIsExpired);
-                }
-                else if (signRequest.ConfirmCode != confirmCode)
-                {
-                    return new ServiceResult<string>(HttpStatusCode.UnprocessableEntity, _applicationErrors.ConfirmCodeIsWrong);
+                    throw new SignRequestException(HttpStatusCode.UnprocessableEntity, _applicationErrors.ConfirmCodeIsWrong);
                 }
 
                 return new ServiceResult<string>(HttpStatusCode.OK);
+
+            }
+            catch (SignRequestException ex)
+            {
+                return new ServiceResult<string>(ex.StatusCode, ex.Message);
 
             }
             catch (Exception ex)
@@ -347,27 +332,15 @@ namespace SignHelperApp.Services.Implements
         {
             try
             {
-                var signRequest = await _signRequestRepository.GetAsync(p => p.Id == command.Id);
+                var signRequest = await SignRequestGetAndCheck(command.Id);
 
-                if (signRequest is null)
+                if (signRequest.ConfirmCode != command.ConfirmCode)
                 {
-                    return new ServiceResult<string>(HttpStatusCode.NotFound, _applicationErrors.SignRequestNotFound);
-                }
-                else if (signRequest.Done)
-                {
-                    return new ServiceResult<string>(HttpStatusCode.UnprocessableEntity, _applicationErrors.DocumentIsSignedBefore);
-                }
-                else if (signRequest.ExpireIn < DateTimeOffset.UtcNow)
-                {
-                    return new ServiceResult<string>(HttpStatusCode.UnprocessableEntity, _applicationErrors.SignRequestIsExpired);
-                }
-                else if (signRequest.ConfirmCode != command.ConfirmCode)
-                {
-                    return new ServiceResult<string>(HttpStatusCode.UnprocessableEntity, _applicationErrors.ConfirmCodeIsWrong);
+                    throw new SignRequestException(HttpStatusCode.UnprocessableEntity, _applicationErrors.ConfirmCodeIsWrong);
                 }
                 else if (command.SignImageData is null)
                 {
-                    return new ServiceResult<string>(HttpStatusCode.UnprocessableEntity, _applicationErrors.SignImageError);
+                    throw new SignRequestException(HttpStatusCode.UnprocessableEntity, _applicationErrors.SignImageError);
                 }
 
                 var signImageFile = SaveSignImage(command);
@@ -376,26 +349,40 @@ namespace SignHelperApp.Services.Implements
                     (GetOriginalDocument(command.Id),
                     GetSignedDocument(command.Id),
                     signImageFile,
-                    signRequest.Template.Width,
-                    signRequest.Template.Height,
-                    signRequest.Template.SignPoints);
+                    signRequest.SignTemplate.Width,
+                    signRequest.SignTemplate.Height,
+                    signRequest.SignTemplate.SignPoints);
 
-                var to = _applicationOptions.SignedDocumentEmailOptions.To ?? new List<string>();
+                if (signRequest.StampTemplateId is not null)
+                {
+                    var stampTemplate = await _templateRepository.GetAsync(signRequest.StampTemplateId.Value);
+
+                    signedDocument = SignDocument
+                    (GetSignedDocument(command.Id),
+                    GetDocument(command.Id, _applicationOptions.PrefixOptions.SignedAndStamped),
+                    GetSelectedStamp(stampTemplate.StampName),
+                    stampTemplate.Width,
+                    stampTemplate.Height,
+                    stampTemplate.SignPoints);
+                }
+
+
+                var to = _applicationOptions.SendDraftDocument.To ?? new List<string>();
                 to.Add(signRequest.RecipientEmail);
 
                 var email = new Email
                 {
-                    SenderEmail = _applicationOptions.SignedDocumentEmailOptions.SenderEmail,
-                    SenderName = _applicationOptions.SignedDocumentEmailOptions.SenderName,
+                    SenderEmail = _applicationOptions.SendSignedDocument.SenderEmail,
+                    SenderName = _applicationOptions.SendSignedDocument.SenderName,
                     To = to,
-                    Subject = _applicationOptions.SignedDocumentEmailOptions.Subject,
-                    Cc = _applicationOptions.SignedDocumentEmailOptions.Cc,
-                    Bcc = _applicationOptions.SignedDocumentEmailOptions.Bcc,
+                    Subject = _applicationOptions.SendSignedDocument.Subject,
+                    Cc = _applicationOptions.SendSignedDocument.Cc,
+                    Bcc = _applicationOptions.SendSignedDocument.Bcc,
 #if (!DEBUG)
                     AttachmentsUrl = new string[] { $"{_applicationOptions.ApplicationBaseUrl}/{signedDocument}" },
 #endif
-                    HeaderPictureUrl = _applicationOptions.SignedDocumentEmailOptions.HeaderPictureUrl,
-                    Body = _applicationOptions.SignedDocumentEmailOptions.Body,
+                    HeaderPictureUrl = _applicationOptions.SendSignedDocument.HeaderPictureUrl,
+                    Body = _applicationOptions.SendSignedDocument.Body,
                 };
 
                 await _emailService.SendEmail(email);
@@ -404,7 +391,13 @@ namespace SignHelperApp.Services.Implements
                 signRequest.Done = true;
                 var saveResult = await _signRequestRepository.SaveChangesAsync();
 
+                await SignCallback(signRequest.Id, signedDocument);
+
                 return ResponseBaseOnResult<string>(saveResult, HttpStatusCode.NoContent);
+            }
+            catch (SignRequestException ex)
+            {
+                return new ServiceResult<string>(ex.StatusCode, ex.Message);
             }
             catch (Exception ex)
             {
@@ -436,21 +429,24 @@ namespace SignHelperApp.Services.Implements
         {
             var doc = new PdfDocument();
             doc.LoadFromFile(originalDocument);
-
-            using (Image image = Image.FromFile(signImage))
+            using (doc)
             {
-                Size size = new Size(width, height);
-
-                foreach (var point in signPoints)
+                using (Image image = Image.FromFile(signImage))
                 {
-                    PdfImage pdfImage = PdfImage.FromImage(image);
-                    PdfPageBase page = doc.Pages[point.Page - 1];
-                    PointF position = new PointF(point.X, point.Y);
-                    page.Canvas.DrawImage(pdfImage, position, size);
-                }
+                    Size size = new Size(width, height);
 
-                doc.SaveToFile(signedDocument);
+                    foreach (var point in signPoints)
+                    {
+                        PdfImage pdfImage = PdfImage.FromImage(image);
+                        PdfPageBase page = doc.Pages[point.Page - 1];
+                        PointF position = new PointF(point.X, point.Y);
+                        page.Canvas.DrawImage(pdfImage, position, size);
+                    }
+
+                    doc.SaveToFile(signedDocument);
+                }
             }
+
             return signedDocument;
         }
 
@@ -473,13 +469,36 @@ namespace SignHelperApp.Services.Implements
             return $"{_applicationOptions.Folders.Temp}/{id}/";
         }
 
-        private string GetSelectedSign(string? name)
+        private string GetSelectedStamp(string? name)
         {
-            var selectedSign = $"{_applicationOptions.Folders.Signs}/{name ?? ""}.png";
-            var defaultSign = $"{_applicationOptions.Folders.Signs}/{_applicationOptions.DefaultSignImageName}.png";
+            var selectedSign = $"{_applicationOptions.Folders.Stamps}/{name ?? ""}.png";
+            var defaultSign = $"{_applicationOptions.Folders.Stamps}/{_applicationOptions.DefaultStampImageName}.png";
 
             var selected = File.Exists(selectedSign) ? selectedSign : defaultSign;
             return selected;
+        }
+
+        private async Task SignCallback(long id, string documentAddress)
+        {
+            var client = _httpClientFactory.CreateClient();
+
+            if (!string.IsNullOrEmpty(_applicationOptions.SignCallbackUrl))
+            {
+                var address = new Uri(_applicationOptions.SignCallbackUrl);
+
+                var dtoAsString = new StringContent(
+                JsonSerializer.Serialize(new SignedDocumentDto
+                {
+                    DocumentAddress = documentAddress,
+                    SignRequestId = id
+                }),
+                Encoding.UTF8,
+                System.Net.Mime.MediaTypeNames.Application.Json);
+
+
+                var response = await client.PostAsync(address, dtoAsString);
+            }
+
         }
 
         private string GenerateConfirmCode()
@@ -492,7 +511,6 @@ namespace SignHelperApp.Services.Implements
 
             //return fullCode.Substring(0, Math.Min(fullCode.Length, _applicationOptions.ConfirmCodeOptions.Length));
         }
-
 
         private ServiceResult<T> ResponseBaseOnResult<T>(int affectedRows, HttpStatusCode successCode, T? result = default)
         {

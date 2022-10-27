@@ -30,8 +30,9 @@ namespace SignHelper.Controllers
                 request.RecipientEmail,
                 request.SingerEmail,
                 request.SignerPhoneNumber,
-                request.TemplateId
-                , request.Description);
+                request.SignTemplateId,
+                request.StampTemplateId,
+                request.Description);
 
             var result = await _signHelperService.SignRequestAdd(command);
             return FromServiceResult(result);

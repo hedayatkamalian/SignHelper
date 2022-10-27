@@ -23,10 +23,11 @@ namespace SignHelperApp.Data
                 .ValueGeneratedNever();
 
             modelBuilder.Entity<SignRequest>()
-                .HasOne(p => p.Template)
+                .HasOne(p => p.SignTemplate)
                 .WithMany(p => p.SignRequests)
-                .HasForeignKey(p => p.TemplateId)
+                .HasForeignKey(p => p.SignTemplateId)
                 .OnDelete(DeleteBehavior.Cascade);
+
 
 
 
@@ -39,9 +40,11 @@ namespace SignHelperApp.Data
 
             modelBuilder.Entity<Template>()
                 .HasMany(p => p.SignRequests)
-                .WithOne(p => p.Template)
-                .HasForeignKey(p => p.TemplateId)
+                .WithOne(p => p.SignTemplate)
+                .HasForeignKey(p => p.SignTemplateId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+
 
             modelBuilder.Entity<Template>()
                 .OwnsMany(p => p.SignPoints).ToTable("Template_SingPoints");

@@ -4,7 +4,7 @@
     {
         public long Id { get; set; }
         public string Name { get; set; }
-        public string? SignImageName { get; set; }
+        public string? StampName { get; set; }
         public int Width { get; set; }
         public int Height { get; set; }
         public IList<SignPoint> SignPoints { get; set; }
